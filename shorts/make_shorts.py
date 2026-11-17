@@ -14,11 +14,13 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
+from audio import make_audio
+
 # ─────────────────────────────────────────────
 # 1. 기본 설정 (여기만 바꿔도 전체 영상에 반영돼요)
 # ─────────────────────────────────────────────
 COMPLEX_NAME = "산곡역자이힐스테이트&하늘채"
-CONTACT = "분양 상담 ☎ 0000-0000"  # ← 실제 상담 번호로 바꿔주세요
+CONTACT = "분양 상담 ☎ 1666-3007"
 MODEL_HOUSE = "견본주택 · 인천 부평구 산곡동 43-2"
 DISCLAIMER = (
     "※ 본 영상은 이해를 돕기 위한 홍보물로 실제와 다를 수 있으며,\n"
@@ -346,9 +348,21 @@ def render_video(video):
     tag = text_block(video["tag"], BOLD, 40, GOLD)
     disclaimer = text_block(DISCLAIMER, REGULAR, 26, (170, 182, 204))
 
+    # 소리: 장면이 바뀔 때 '휙', 숫자가 다 올라가거나 마지막 화면이 뜰 때 '띵'
+    starts, dings, acc = [], [], 0.0
+    for dur, built in scenes:
+        starts.append(acc)
+        for i, b in enumerate(built):
+            if b["kind"] == "count":
+                dings.append(acc + 0.12 + i * 0.2 + 1.3)
+        acc += dur
+    dings.append(starts[-1] + 0.35)
+    wav = OUT_DIR / (video["file"] + ".wav")
+    make_audio(wav, total, starts, dings, VIDEOS.index(video))
+
     cmd = ["ffmpeg", "-y", "-loglevel", "error",
            "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
-           "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+           "-i", str(wav), "-b:a", "192k",
            "-shortest", "-c:v", "libx264", "-preset", "medium", "-crf", "20",
            "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart", str(out)]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
@@ -381,6 +395,7 @@ def render_video(video):
 
     proc.stdin.close()
     proc.wait()
+    wav.unlink()
     print(f"완성: {out} ({total:.1f}초)")
 
 
